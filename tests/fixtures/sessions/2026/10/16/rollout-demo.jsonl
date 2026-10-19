@@ -1,0 +1,4 @@
+{"type":"event_msg","timestamp":"2026-10-16T17:00:00Z","payload":{"type":"token_count","rate_limits":{"plan_type":"plus","primary":{"used_percent":40.0,"window_minutes":300,"resets_at":1760641200},"secondary":{"used_percent":20.0,"window_minutes":10080,"resets_at":1761100000}}}}
+{"type":"event_msg","timestamp":"2026-10-16T17:30:00Z","payload":{"type":"token_count","rate_limits":{"plan_type":"plus","primary":{"used_percent":42.0,"window_minutes":300,"resets_at":1760641200},"secondary":{"used_percent":21.0,"window_minutes":10080,"resets_at":1761100000}}}}
+{"type":"event_msg","timestamp":"2026-10-16T18:10:00Z","payload":{"type":"token_count","rate_limits":{"plan_type":"plus","primary":{"used_percent":44.0,"window_minutes":300,"resets_at":1760641200},"secondary":{"used_percent":33.0,"window_minutes":10080,"resets_at":1761100000}}}}
+{"type":"response_item","timestamp":"2026-10-16T18:11:00Z","payload":{"type":"message"}}
