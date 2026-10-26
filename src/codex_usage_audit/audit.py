@@ -26,6 +26,9 @@ class Cliff:
     window_minutes: int
     before: float
     after: float
+    previous_at: str = ""
+    plan_before: str = "unknown"
+    plan_after: str = "unknown"
 
     @property
     def delta(self) -> float:
@@ -107,9 +110,26 @@ def find_cliffs(readings: list[Reading], threshold: float) -> list[Cliff]:
                     window_minutes=cur.window_minutes,
                     before=prev.used_percent,
                     after=cur.used_percent,
+                    previous_at=prev.at,
+                    plan_before=prev.plan_type,
+                    plan_after=cur.plan_type,
                 )
             )
     return cliffs
+
+
+def format_gap(previous_at: str, at: str) -> str:
+    """Describe the time between two readings, such as '40m' or '3h 05m'."""
+    if not previous_at or not at:
+        return "unknown time"
+    minutes = int((_parse_time(at) - _parse_time(previous_at)).total_seconds() // 60)
+    days, rest = divmod(minutes, 24 * 60)
+    hours, mins = divmod(rest, 60)
+    if days:
+        return f"{days}d {hours}h"
+    if hours:
+        return f"{hours}h {mins:02d}m"
+    return f"{mins}m"
 
 
 def run_audit(sessions_dir: Path, threshold: float) -> str:
@@ -125,8 +145,12 @@ def run_audit(sessions_dir: Path, threshold: float) -> str:
         lines.append(f"No jumps above {threshold} points.")
     for c in cliffs:
         hours = c.window_minutes // 60
-        lines.append(
+        line = (
             f"  {c.at}  {hours}h window  {c.before:.1f}% -> {c.after:.1f}%  "
-            f"(+{c.after - c.before:.1f})"
+            f"(+{c.after - c.before:.1f})  "
+            f"{format_gap(c.previous_at, c.at)} after the previous reading"
         )
+        if c.plan_before != c.plan_after:
+            line += f", plan changed {c.plan_before} -> {c.plan_after}"
+        lines.append(line)
     return "\n".join(lines)

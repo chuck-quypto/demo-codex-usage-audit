@@ -20,7 +20,7 @@ The sample run prints:
 
 ```
 Read 6 rate-limit readings.
-  2026-10-16T18:10:00Z  168h window  21.0% -> 33.0%  (+12.0)
+  2026-10-16T18:10:00Z  168h window  21.0% -> 33.0%  (+12.0)  40m after the previous reading
 ```
 
 ## What you need
