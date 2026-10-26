@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
+NO_PLAN = "none"
+
 
 @dataclass(frozen=True)
 class Reading:
@@ -33,6 +35,24 @@ class Cliff:
     @property
     def delta(self) -> float:
         return round(self.after - self.before, 1)
+
+    def gap_minutes(self) -> float | None:
+        if not self.previous_at or not self.at:
+            return None
+        return (
+            _parse_time(self.at) - _parse_time(self.previous_at)
+        ).total_seconds() / 60
+
+    def why_not_sudden(self, max_gap_minutes: float) -> str:
+        """Return why this rise is not a sudden jump, or '' if it is one."""
+        if self.plan_before != self.plan_after:
+            return f"plan changed {self.plan_before} -> {self.plan_after}"
+        gap = self.gap_minutes()
+        if gap is None:
+            return "time between readings unknown"
+        if gap > max_gap_minutes:
+            return "long gap with no readings"
+        return ""
 
 
 def _find_rate_limits(node):
@@ -62,6 +82,8 @@ def _readings_from_line(line: str, source: str, at_default: str) -> list[Reading
         return []
     at = event.get("timestamp", at_default)
     plan = str(limits.get("plan_type", "unknown"))
+    if limits.get("plan_type", "unknown") is None:
+        plan = NO_PLAN
     out = []
     for key in ("primary", "secondary"):
         window = limits.get(key)
@@ -87,8 +109,21 @@ def collect_readings(sessions_dir: Path) -> list[Reading]:
     for path in sorted(Path(sessions_dir).rglob("*.jsonl")):
         for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
             readings.extend(_readings_from_line(line, str(path), at_default=""))
+    readings = [r for r in readings if r.plan_type != NO_PLAN]
     readings.sort(key=lambda r: (r.window_minutes, _parse_time(r.at)))
     return readings
+
+
+def count_no_plan_readings(sessions_dir: Path) -> int:
+    """Count readings that report no plan type; collect_readings leaves these out."""
+    count = 0
+    for path in sorted(Path(sessions_dir).rglob("*.jsonl")):
+        for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+            count += sum(
+                r.plan_type == NO_PLAN
+                for r in _readings_from_line(line, str(path), at_default="")
+            )
+    return count
 
 
 def _parse_time(value: str) -> datetime:
@@ -132,25 +167,37 @@ def format_gap(previous_at: str, at: str) -> str:
     return f"{mins}m"
 
 
-def run_audit(sessions_dir: Path, threshold: float) -> str:
+def _cliff_line(c: Cliff) -> str:
+    hours = c.window_minutes // 60
+    return (
+        f"  {c.at}  {hours}h window  {c.before:.1f}% -> {c.after:.1f}%  "
+        f"(+{c.delta:.1f})  {format_gap(c.previous_at, c.at)} after the previous reading"
+    )
+
+
+def run_audit(sessions_dir: Path, threshold: float, max_gap_minutes: float = 60) -> str:
     readings = collect_readings(sessions_dir)
+    skipped = count_no_plan_readings(sessions_dir)
     if not readings:
         return (
             f"No rate_limits events found under {sessions_dir}. "
             "Run Codex CLI once, or pass --sessions to point at your logs."
         )
     cliffs = find_cliffs(readings, threshold)
+    sudden = [c for c in cliffs if not c.why_not_sudden(max_gap_minutes)]
+    other = [c for c in cliffs if c.why_not_sudden(max_gap_minutes)]
     lines = [f"Read {len(readings)} rate-limit readings."]
-    if not cliffs:
-        lines.append(f"No jumps above {threshold} points.")
-    for c in cliffs:
-        hours = c.window_minutes // 60
-        line = (
-            f"  {c.at}  {hours}h window  {c.before:.1f}% -> {c.after:.1f}%  "
-            f"(+{c.after - c.before:.1f})  "
-            f"{format_gap(c.previous_at, c.at)} after the previous reading"
+    if skipped:
+        lines.append(f"Left out {skipped} readings that reported no plan.")
+    lines.append(
+        f"Sudden jumps (more than {threshold:g} points within {max_gap_minutes:g} minutes):"
+    )
+    if not sudden:
+        lines.append("  None.")
+    lines.extend(_cliff_line(c) for c in sudden)
+    if other:
+        lines.append("Other rises, not counted as sudden:")
+        lines.extend(
+            f"{_cliff_line(c)}, {c.why_not_sudden(max_gap_minutes)}" for c in other
         )
-        if c.plan_before != c.plan_after:
-            line += f", plan changed {c.plan_before} -> {c.plan_after}"
-        lines.append(line)
     return "\n".join(lines)
