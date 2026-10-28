@@ -17,11 +17,17 @@ def main(argv: list[str] | None = None) -> int:
         "--threshold", type=float, default=5.0, help="points per reading"
     )
     parser.add_argument(
+        "--max-gap",
+        type=float,
+        default=60.0,
+        help="minutes between readings that still count as sudden",
+    )
+    parser.add_argument(
         "--demo", action="store_true", help="use the bundled fixture logs"
     )
     args = parser.parse_args(argv)
     sessions = DEMO_DIR if args.demo else args.sessions
-    print(run_audit(sessions, threshold=args.threshold))
+    print(run_audit(sessions, threshold=args.threshold, max_gap_minutes=args.max_gap))
     return 0
 
 
